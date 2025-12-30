@@ -92,7 +92,8 @@ def predict():
         
         for result in results:
             boxes = result.boxes
-            for box in boxes:
+            masks = result.masks
+            for i, box in enumerate(boxes):
                 class_id = int(box.cls[0])
                 confidence = float(box.conf[0])
                 
@@ -103,12 +104,19 @@ def predict():
                         'binColor': 'black'
                     })
                     
-                    predictions.append({
+                    prediction = {
                         'class': waste_info['name'],
                         'confidence': round(confidence, 2),
                         'binColor': waste_info['binColor'],
-                        'binType': waste_info['binType']
-                    })
+                        'binType': waste_info['binType'],
+                        'bbox': box.xyxy[0].tolist()  # [x1, y1, x2, y2]
+                    }
+                    
+                    # Eğer model segmentation modeliyse mask noktalarını ekle
+                    if masks is not None:
+                        prediction['segment'] = masks.xy[i].tolist() # [[x1,y1], [x2,y2]...]
+                        
+                    predictions.append(prediction)
         
         processing_time = time.time() - start_time
         print(f"✅ {len(predictions)} tahmin yapıldı - {processing_time:.2f}s")
@@ -117,7 +125,8 @@ def predict():
             'success': True,
             'predictions': predictions,
             'processing_time': f'{processing_time:.2f}s',
-            'total_objects': len(predictions)
+            'total_objects': len(predictions),
+            'image_size': {'width': img.width, 'height': img.height}
         })
         
     except Exception as e:

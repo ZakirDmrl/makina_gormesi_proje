@@ -94,28 +94,15 @@ app.post('/api/classify', upload.single('image'), async (req, res) => {
         data: {
           imageUrl: imageUrl,
           predictions: mlResponse.data.predictions,
-          processingTime: mlResponse.data.processing_time
+          processingTime: mlResponse.data.processing_time,
+          imageSize: mlResponse.data.image_size
         }
       });
     } catch (mlError) {
-      // ML servisi çalışmıyorsa mock data dön
-      console.warn('ML servisi yanıt vermiyor, mock data kullanılıyor:', mlError.message);
-      
-      res.json({
-        success: true,
-        data: {
-          imageUrl: imageUrl,
-          predictions: [
-            {
-              class: 'plastic',
-              confidence: 0.92,
-              binColor: 'yellow',
-              binType: 'Plastik Atık'
-            }
-          ],
-          processingTime: '0.15s',
-          note: 'ML servisi bekleniyor - mock data'
-        }
+      console.error('ML Servis Hatası:', mlError.message);
+      res.status(500).json({
+        success: false,
+        error: 'Sınıflandırma servisi şu an çevrimdışı.'
       });
     }
 

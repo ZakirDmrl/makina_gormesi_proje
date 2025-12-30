@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,32 +8,22 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera } from 'expo-camera';
 import { classifyWaste } from '../services/api';
-import { WASTE_COLORS, WASTE_TYPES, WASTE_ICONS } from '../constants/wasteTypes';
 
 export default function HomeScreen() {
   const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
-  const [hasPermission, setHasPermission] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      const { status: cameraStatus } = await Camera.requestCameraPermissionsAsync();
-      const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      setHasPermission(cameraStatus === 'granted' && mediaStatus === 'granted');
-    })();
-  }, []);
+  const [imageLayout, setImageLayout] = useState(null);
 
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 1,
       });
 
@@ -48,9 +38,14 @@ export default function HomeScreen() {
 
   const takePhoto = async () => {
     try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Hata', 'Kamera izni verilmedi');
+        return;
+      }
+
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 1,
       });
 
@@ -92,6 +87,48 @@ export default function HomeScreen() {
     }
   };
 
+  const renderBoundingBoxes = () => {
+    if (!results || !results.predictions || !imageLayout || !results.imageSize) return null;
+
+    const { width: layoutWidth, height: layoutHeight } = imageLayout;
+    const { width: origWidth, height: origHeight } = results.imageSize;
+
+    const imageAspect = origWidth / origHeight;
+    const layoutAspect = layoutWidth / layoutHeight;
+
+    let scale, offsetX = 0, offsetY = 0;
+
+    if (imageAspect > layoutAspect) {
+      scale = layoutWidth / origWidth;
+      offsetY = (layoutHeight - (origHeight * scale)) / 2;
+    } else {
+      scale = layoutHeight / origHeight;
+      offsetX = (layoutWidth - (origWidth * scale)) / 2;
+    }
+
+    return results.predictions.map((pred, index) => {
+      const [x1, y1, x2, y2] = pred.bbox;
+      const boxWidth = (x2 - x1) * scale;
+      const boxHeight = (y2 - y1) * scale;
+      const boxLeft = x1 * scale + offsetX;
+      const boxTop = y1 * scale + offsetY;
+
+      return (
+        <View
+          key={index}
+          style={[
+            styles.boundingBox,
+            { left: boxLeft, top: boxTop, width: boxWidth, height: boxHeight, borderColor: pred.binColor || '#10B981' }
+          ]}
+        >
+          <View style={[styles.labelContainer, { backgroundColor: pred.binColor || '#10B981' }]}>
+            <Text style={styles.labelText}>{pred.class} %{Math.round(pred.confidence * 100)}</Text>
+          </View>
+        </View>
+      );
+    });
+  };
+
   const renderResults = () => {
     if (!results || !results.predictions || results.predictions.length === 0) {
       return (
@@ -109,16 +146,13 @@ export default function HomeScreen() {
             key={index}
             style={[
               styles.predictionCard,
-              { borderLeftColor: WASTE_COLORS[pred.class] },
+              { borderLeftColor: pred.binColor || '#10B981' },
             ]}
           >
             <View style={styles.predictionHeader}>
-              <Text style={styles.predictionIcon}>
-                {WASTE_ICONS[pred.class]}
-              </Text>
               <View style={styles.predictionInfo}>
                 <Text style={styles.predictionType}>
-                  {pred.binType || WASTE_TYPES[pred.class]}
+                  {pred.binType || pred.class}
                 </Text>
                 <Text style={styles.predictionConfidence}>
                   Güven: {(pred.confidence * 100).toFixed(1)}%
@@ -128,7 +162,7 @@ export default function HomeScreen() {
             <View
               style={[
                 styles.binColorIndicator,
-                { backgroundColor: WASTE_COLORS[pred.class] },
+                { backgroundColor: pred.binColor || '#10B981' },
               ]}
             >
               <Text style={styles.binColorText}>
@@ -143,20 +177,6 @@ export default function HomeScreen() {
       </View>
     );
   };
-
-  if (hasPermission === null) {
-    return <View />;
-  }
-
-  if (hasPermission === false) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.permissionText}>
-          Kamera ve galeri erişim izni gerekli
-        </Text>
-      </View>
-    );
-  }
 
   return (
     <ScrollView style={styles.container}>
@@ -180,8 +200,16 @@ export default function HomeScreen() {
         </View>
 
         {image && (
-          <View style={styles.imageContainer}>
-            <Image source={{ uri: image }} style={styles.image} />
+          <View 
+            style={styles.imageContainer}
+            onLayout={(event) => setImageLayout(event.nativeEvent.layout)}
+          >
+            <Image 
+              source={{ uri: image }} 
+              style={styles.image} 
+              resizeMode="contain"
+            />
+            {renderBoundingBoxes()}
             <TouchableOpacity
               style={styles.classifyButton}
               onPress={handleClassify}
@@ -249,18 +277,21 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     marginBottom: 20,
+    position: 'relative',
+    backgroundColor: '#E5E7EB',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: 300,
-    borderRadius: 12,
-    marginBottom: 12,
   },
   classifyButton: {
     backgroundColor: '#8B5CF6',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 12,
   },
   classifyButtonText: {
     color: '#FFF',
@@ -340,5 +371,23 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     textAlign: 'center',
     padding: 20,
+  },
+  boundingBox: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  labelContainer: {
+    position: 'absolute',
+    top: -20,
+    left: -2,
+    paddingHorizontal: 4,
+    borderRadius: 2,
+  },
+  labelText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
