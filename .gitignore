@@ -1,0 +1,47 @@
+# Node modules
+node_modules/
+package-lock.json
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+
+# Uploads and outputs
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ML models (büyük dosyalar)
+ml-service/models/*.pt
+!ml-service/models/.gitkeep
+
+# Expo
+mobile-app/.expo/
+mobile-app/.expo-shared/
+mobile-app/android/
+mobile-app/ios/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
